@@ -1,8 +1,8 @@
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::domain::MemoryItem;
 use crate::error::SynapseError;
+use crate::persistence::{read_json, write_json_atomic};
 
 /// Persists the full set of memory items.
 ///
@@ -28,35 +28,11 @@ impl JsonFileStore {
 
 impl MemoryStore for JsonFileStore {
     fn load(&self) -> Result<Vec<MemoryItem>, SynapseError> {
-        if !self.path.exists() {
-            return Ok(Vec::new());
-        }
-        let data = fs::read_to_string(&self.path).map_err(|source| SynapseError::Io {
-            path: self.path.clone(),
-            source,
-        })?;
-        Ok(serde_json::from_str(&data)?)
+        read_json(&self.path)
     }
 
     fn save(&self, items: &[MemoryItem]) -> Result<(), SynapseError> {
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).map_err(|source| SynapseError::Io {
-                path: parent.to_path_buf(),
-                source,
-            })?;
-        }
-
-        let data = serde_json::to_string_pretty(items)?;
-        let tmp_path = self.path.with_extension("json.tmp");
-        fs::write(&tmp_path, &data).map_err(|source| SynapseError::Io {
-            path: tmp_path.clone(),
-            source,
-        })?;
-        fs::rename(&tmp_path, &self.path).map_err(|source| SynapseError::Io {
-            path: self.path.clone(),
-            source,
-        })?;
-        Ok(())
+        write_json_atomic(&self.path, &items)
     }
 }
 

@@ -1,7 +1,36 @@
+use std::collections::BTreeMap;
+
 use chrono::{Duration, NaiveDate, Utc};
 use serde::Serialize;
 
 use crate::domain::MemoryItem;
+
+#[derive(Debug, Serialize, Clone, PartialEq)]
+pub struct TrackSummary {
+    pub name: String,
+    pub total: usize,
+    pub due: usize,
+}
+
+/// Per-track item/due counts, sorted alphabetically by track name.
+pub fn list_tracks(items: &[MemoryItem]) -> Vec<TrackSummary> {
+    let mut counts: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+    for item in items {
+        let entry = counts.entry(item.training_track.as_str()).or_default();
+        entry.0 += 1;
+        if item.is_due() {
+            entry.1 += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .map(|(name, (total, due))| TrackSummary {
+            name: name.to_string(),
+            total,
+            due,
+        })
+        .collect()
+}
 
 #[derive(Debug, Serialize, Clone, PartialEq)]
 pub struct Stats {
@@ -106,6 +135,26 @@ fn current_streak(dates: &[NaiveDate]) -> u32 {
 mod tests {
     use super::*;
     use crate::scheduler::{Scheduler, Sm2Scheduler};
+
+    #[test]
+    fn list_tracks_groups_and_counts_due_items() {
+        let mut rust_due = MemoryItem::new("Rust", "What is a trait object?", "...");
+        rust_due.next_review = Utc::now() - Duration::days(1);
+        let mut rust_not_due = MemoryItem::new("Rust", "What is Copy?", "...");
+        rust_not_due.next_review = Utc::now() + Duration::days(1);
+        let mut bio = MemoryItem::new("Biology", "What is ATP?", "...");
+        bio.next_review = Utc::now() - Duration::days(1);
+
+        let tracks = list_tracks(&[rust_due, rust_not_due, bio]);
+
+        assert_eq!(tracks.len(), 2);
+        assert_eq!(tracks[0].name, "Biology");
+        assert_eq!(tracks[0].total, 1);
+        assert_eq!(tracks[0].due, 1);
+        assert_eq!(tracks[1].name, "Rust");
+        assert_eq!(tracks[1].total, 2);
+        assert_eq!(tracks[1].due, 1);
+    }
 
     #[test]
     fn empty_collection_has_zeroed_stats() {
