@@ -49,7 +49,7 @@ synapse/
 ├── src/                 # Svelte frontend
 │   └── lib/
 │       ├── api.ts            # Typed wrapper around Tauri's invoke()
-│       ├── colors.ts          # Validated categorical palette (track/graph colors)
+│       ├── colors.ts         # Validated categorical palette (track/graph colors)
 │       └── components/       # Dashboard, ReviewSession, CardView, TrackManager,
 │                              # KnowledgeGraph, Insights, SettingsPanel, ConfirmDialog, ...
 └── Synapse_Task_Codex.docx   # Original project brief / phased roadmap
@@ -73,16 +73,16 @@ check-revoke = false
 
 ```bash
 npm install
-npm run dev           # starts the Vite dev server on :1420
-cargo tauri dev        # in a second terminal — launches the desktop window
+npm run dev      # starts the Vite dev server on :1420
+cargo tauri dev  # in a second terminal — launches the desktop window
 ```
 
 ### Testing
 
 ```bash
 cargo test --workspace   # Rust unit tests (synapse-core)
-npx svelte-check          # frontend type checking
-npm run build              # production frontend build
+npx svelte-check         # frontend type checking
+npm run build            # production frontend build
 ```
 
 ### Building a release binary
@@ -91,7 +91,7 @@ npm run build              # production frontend build
 cargo build --release --workspace
 ```
 
-The release profile (workspace `Cargo.toml`) enables LTO, single codegen unit, and symbol stripping for a smaller, faster binary (`target/release/synapse.exe` on Windows, ~7MB).
+The release profile (workspace `Cargo.toml`) enables LTO, single codegen unit, and symbol stripping for a smaller, faster binary (`target/release/synapse.exe` on Windows, ~7.5MB).
 
 ### Building an installer
 
@@ -99,7 +99,9 @@ The release profile (workspace `Cargo.toml`) enables LTO, single codegen unit, a
 cargo tauri build
 ```
 
-Produces a real Windows installer via WiX (`.msi`) and NSIS (`.exe`) in `target/release/bundle/`. Note: `cargo tauri build` requires `--features custom-protocol` on `src-tauri`, which is now declared in `src-tauri/Cargo.toml` (a gap in the original scaffold — it wasn't caught until someone actually ran a release build). No code signing or auto-update yet — see "Not yet built" below.
+Produces a real Windows installer via WiX (`.msi`, ~3.3MB) and NSIS (`.exe`, ~2.2MB) in `target/release/bundle/`. No code signing or auto-update yet — see "Not yet built" below.
+
+The first run downloads the WiX and NSIS toolchains into `%LOCALAPPDATA%\tauri`. On a network with TLS interception (e.g. a corporate proxy or security product doing certificate inspection), that download can fail with `invalid peer certificate: UnknownIssuer` — this is a different failure mode than the cargo/crates.io issue above (it comes from `tauri-bundler`'s own bundled certificate store rejecting the interception cert, not a revocation-check problem), so the `.cargo/config.toml` fix doesn't help here. If you hit it: fetch the same URLs with a tool that uses the OS certificate store instead (e.g. PowerShell's `Invoke-WebRequest`) and place the files where `tauri-bundler` expects them — check `~/.cargo/registry/src/*/tauri-bundler-*/src/bundle/windows/{msi,nsis}.rs` for the exact URLs and target paths, since they're not otherwise documented.
 
 ## Data location
 
@@ -123,7 +125,7 @@ Built in phases, per the original brief in `Synapse_Task_Codex.docx`. All five a
 
 ### Beyond the original roadmap
 
-Two follow-up passes after Phase 5 wrapped:
+Four follow-up passes after Phase 5 wrapped:
 
 - **Frontend depth pass** — post-score interval feedback, Anki-style cloze hints, real Prism.js syntax highlighting, and a draggable/zoomable knowledge graph.
 - **FSRS-6 scheduler** — a second `Scheduler` implementation alongside SM-2, selectable per-vault in Settings. Ported directly from the official reference implementation's source, not a paraphrase (see `synapse-core/src/fsrs.rs` for why that distinction mattered).
