@@ -3,10 +3,12 @@
   import Dashboard from './lib/components/Dashboard.svelte'
   import ReviewSession from './lib/components/ReviewSession.svelte'
   import TrackManager from './lib/components/TrackManager.svelte'
+  import KnowledgeGraph from './lib/components/KnowledgeGraph.svelte'
+  import Insights from './lib/components/Insights.svelte'
   import SettingsPanel from './lib/components/SettingsPanel.svelte'
   import { api, describeError, type Settings } from './lib/api'
 
-  type View = 'dashboard' | 'review' | 'tracks' | 'settings'
+  type View = 'dashboard' | 'review' | 'tracks' | 'graph' | 'insights' | 'settings'
 
   let view = $state<View>('dashboard')
   let settings = $state<Settings>({ daily_review_limit: 20, theme: 'neural' })
@@ -27,6 +29,8 @@
   const navItems: { id: View; label: string }[] = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'tracks', label: 'Tracks' },
+    { id: 'graph', label: 'Graph' },
+    { id: 'insights', label: 'Insights' },
     { id: 'settings', label: 'Settings' },
   ]
 </script>
@@ -57,6 +61,10 @@
         <Dashboard onStartReview={() => (view = 'review')} />
       {:else if view === 'tracks'}
         <TrackManager />
+      {:else if view === 'graph'}
+        <KnowledgeGraph />
+      {:else if view === 'insights'}
+        <Insights />
       {:else if view === 'settings'}
         <SettingsPanel {settings} onChange={(s) => (settings = s)} />
       {/if}

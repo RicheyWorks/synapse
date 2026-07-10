@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { api, describeError, type TrackSummary } from '../api'
+  import { api, describeError, type CardContent, type TrackSummary } from '../api'
 
   let tracks = $state<TrackSummary[]>([])
   let loading = $state(true)
@@ -10,7 +10,21 @@
 
   let track = $state('')
   let prompt = $state('')
-  let content = $state('')
+  let cardType = $state<CardContent['type']>('basic')
+
+  let answer = $state('')
+  let clozeText = $state('')
+  let language = $state('')
+  let code = $state('')
+  let imagePath = $state('')
+  let imageCaption = $state('')
+
+  const cardTypes: { id: CardContent['type']; label: string }[] = [
+    { id: 'basic', label: 'Basic' },
+    { id: 'cloze', label: 'Cloze' },
+    { id: 'code', label: 'Code' },
+    { id: 'image', label: 'Image' },
+  ]
 
   async function load() {
     loading = true
@@ -26,18 +40,41 @@
 
   onMount(load)
 
-  const canSubmit = $derived(track.trim() !== '' && prompt.trim() !== '' && content.trim() !== '')
+  function buildCard(): CardContent | null {
+    switch (cardType) {
+      case 'basic':
+        return answer.trim() ? { type: 'basic', answer: answer.trim() } : null
+      case 'cloze':
+        return clozeText.trim() ? { type: 'cloze', text: clozeText.trim() } : null
+      case 'code':
+        return code.trim() ? { type: 'code', language: language.trim() || 'text', code: code.trim() } : null
+      case 'image':
+        return imagePath.trim() ? { type: 'image', path: imagePath.trim(), caption: imageCaption.trim() || null } : null
+    }
+  }
+
+  const canSubmit = $derived(track.trim() !== '' && prompt.trim() !== '' && buildCard() !== null)
+
+  function resetCardFields() {
+    answer = ''
+    clozeText = ''
+    language = ''
+    code = ''
+    imagePath = ''
+    imageCaption = ''
+  }
 
   async function submit(e: Event) {
     e.preventDefault()
-    if (!canSubmit || saving) return
+    const card = buildCard()
+    if (!canSubmit || saving || !card) return
     saving = true
     error = null
     saved = false
     try {
-      await api.addMemory(track.trim(), prompt.trim(), content.trim())
+      await api.addMemory(track.trim(), prompt.trim(), card)
       prompt = ''
-      content = ''
+      resetCardFields()
       saved = true
       await load()
     } catch (e) {
@@ -78,14 +115,80 @@
       ></textarea>
     </label>
 
-    <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
-      Content
-      <textarea
-        class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] min-h-24"
-        placeholder="The answer / fact to remember"
-        bind:value={content}
-      ></textarea>
-    </label>
+    <div class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
+      Card type
+      <div class="flex gap-1">
+        {#each cardTypes as ct (ct.id)}
+          <button
+            type="button"
+            class={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+              cardType === ct.id
+                ? 'bg-[var(--accent)] text-[var(--accent-contrast)]'
+                : 'bg-[var(--bg-inset)] text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+            onclick={() => (cardType = ct.id)}
+          >
+            {ct.label}
+          </button>
+        {/each}
+      </div>
+    </div>
+
+    {#if cardType === 'basic'}
+      <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
+        Answer
+        <textarea
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] min-h-24"
+          placeholder="The answer / fact to remember"
+          bind:value={answer}
+        ></textarea>
+      </label>
+    {:else if cardType === 'cloze'}
+      <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
+        Cloze text
+        <textarea
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] min-h-24"
+          placeholder={'The {{c1::mitochondria}} is the powerhouse of the cell'}
+          bind:value={clozeText}
+        ></textarea>
+        <span class="text-xs text-[var(--text-muted)]">
+          Wrap the hidden part in <code class="text-[var(--text)]">{'{{c1::...}}'}</code>
+        </span>
+      </label>
+    {:else if cardType === 'code'}
+      <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
+        Language
+        <input
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          placeholder="rust"
+          bind:value={language}
+        />
+      </label>
+      <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
+        Code
+        <textarea
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] min-h-24 font-mono"
+          placeholder={'fn main() {}'}
+          bind:value={code}
+        ></textarea>
+      </label>
+    {:else if cardType === 'image'}
+      <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
+        Image path or URL
+        <input
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          placeholder="/path/to/diagram.png"
+          bind:value={imagePath}
+        />
+      </label>
+      <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
+        Caption (optional)
+        <input
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          bind:value={imageCaption}
+        />
+      </label>
+    {/if}
 
     <button
       type="submit"

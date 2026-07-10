@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { api, describeError, type MemoryItem } from '../api'
+  import CardView from './CardView.svelte'
 
   let { onFinish }: { onFinish: () => void } = $props()
 
@@ -129,9 +130,9 @@
       >
         <span class="text-xs uppercase tracking-wide text-[var(--text-muted)]">{current.training_track}</span>
         <p class="text-xl text-[var(--text)]">{current.prompt}</p>
-        {#if revealed}
+        {#if revealed || current.card.type === 'cloze'}
           <div class="w-full border-t border-[var(--border)] pt-4 mt-2">
-            <p class="text-[var(--text)]">{current.content}</p>
+            <CardView card={current.card} {revealed} />
           </div>
         {/if}
       </div>
