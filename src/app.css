@@ -84,3 +84,63 @@ h3 {
   background: var(--accent);
   color: var(--accent-contrast);
 }
+
+/*
+ * Prism syntax highlighting, themed with the app's own semantic colors
+ * rather than a canned Prism theme, so code blocks look native in both
+ * neural and blackbeard instead of clashing. Prism outputs raw HTML via
+ * {@html} in CardView, so these rules must be global, not component-scoped.
+ */
+.prism-block .token.comment,
+.prism-block .token.prolog,
+.prism-block .token.doctype,
+.prism-block .token.cdata {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.prism-block .token.punctuation,
+.prism-block .token.operator {
+  color: var(--text-muted);
+}
+.prism-block .token.property,
+.prism-block .token.tag,
+.prism-block .token.boolean,
+.prism-block .token.number,
+.prism-block .token.constant,
+.prism-block .token.symbol,
+.prism-block .token.deleted,
+.prism-block .token.selector,
+.prism-block .token.attr-name {
+  color: var(--warning);
+}
+.prism-block .token.string,
+.prism-block .token.char,
+.prism-block .token.builtin,
+.prism-block .token.inserted,
+.prism-block .token.attr-value {
+  color: var(--success);
+}
+.prism-block .token.atrule,
+.prism-block .token.keyword,
+.prism-block .token.important {
+  color: var(--accent);
+}
+.prism-block .token.function,
+.prism-block .token.class-name {
+  color: var(--text);
+  font-weight: 600;
+}
+.prism-block .token.regex,
+.prism-block .token.variable {
+  color: var(--danger);
+}
+.prism-block .token.entity {
+  color: var(--text);
+  text-decoration: underline dotted;
+}
+.prism-block .token.italic {
+  font-style: italic;
+}
+.prism-block .token.bold {
+  font-weight: 700;
+}

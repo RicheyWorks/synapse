@@ -14,6 +14,7 @@
     "@tailwindcss/vite": "^4.3.2",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^24.13.2",
+    "@types/prismjs": "^1.26.6",
     "svelte": "^5.56.4",
     "svelte-check": "^4.7.1",
     "tailwindcss": "^4.3.2",
@@ -21,6 +22,7 @@
     "vite": "^8.1.1"
   },
   "dependencies": {
-    "@tauri-apps/api": "^1.6.0"
+    "@tauri-apps/api": "^1.6.0",
+    "prismjs": "^1.30.0"
   }
 }
