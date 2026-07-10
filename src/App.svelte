@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { fade } from 'svelte/transition'
   import Dashboard from './lib/components/Dashboard.svelte'
   import ReviewSession from './lib/components/ReviewSession.svelte'
   import TrackManager from './lib/components/TrackManager.svelte'
@@ -39,14 +40,16 @@
   <ReviewSession onFinish={() => (view = 'dashboard')} />
 {:else}
   <div class="flex flex-col h-full">
-    <nav class="flex items-center justify-between border-b border-[var(--border)] px-6 py-3">
+    <nav class="flex items-center justify-between border-b border-[var(--border)] px-6 py-3" aria-label="Main">
       <span class="font-semibold text-[var(--text)]">Synapse</span>
-      <div class="flex gap-1">
+      <div class="flex gap-1" role="tablist">
         {#each navItems as item (item.id)}
           <button
             class={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
               view === item.id ? 'bg-[var(--bg-inset)] text-[var(--text)]' : 'text-[var(--text-muted)]'
             }`}
+            role="tab"
+            aria-selected={view === item.id}
             onclick={() => (view = item.id)}
           >
             {item.label}
@@ -57,16 +60,22 @@
     <main class="flex-1 overflow-y-auto">
       {#if loadError}
         <p class="text-[var(--danger)] p-8">{loadError}</p>
-      {:else if view === 'dashboard'}
-        <Dashboard onStartReview={() => (view = 'review')} />
-      {:else if view === 'tracks'}
-        <TrackManager />
-      {:else if view === 'graph'}
-        <KnowledgeGraph />
-      {:else if view === 'insights'}
-        <Insights />
-      {:else if view === 'settings'}
-        <SettingsPanel {settings} onChange={(s) => (settings = s)} />
+      {:else}
+        {#key view}
+          <div in:fade={{ duration: 120 }}>
+            {#if view === 'dashboard'}
+              <Dashboard onStartReview={() => (view = 'review')} />
+            {:else if view === 'tracks'}
+              <TrackManager />
+            {:else if view === 'graph'}
+              <KnowledgeGraph />
+            {:else if view === 'insights'}
+              <Insights />
+            {:else if view === 'settings'}
+              <SettingsPanel {settings} onChange={(s) => (settings = s)} />
+            {/if}
+          </div>
+        {/key}
       {/if}
     </main>
   </div>

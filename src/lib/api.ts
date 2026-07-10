@@ -100,6 +100,11 @@ export interface GamificationSummary {
   achievements: Achievement[]
 }
 
+export interface BackupInfo {
+  filename: string
+  created_at: string
+}
+
 /** Thin wrapper so call sites don't import from @tauri-apps/api directly. */
 function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   return tauriInvoke<T>(cmd, args)
@@ -146,6 +151,12 @@ export const api = {
   getHardestItems: (limit: number) => invoke<MemoryItem[]>('get_hardest_items', { limit }),
 
   getGamification: () => invoke<GamificationSummary>('get_gamification'),
+
+  createManualBackup: () => invoke<string>('create_manual_backup'),
+
+  listBackups: () => invoke<BackupInfo[]>('list_backups'),
+
+  restoreBackup: (filename: string) => invoke<number>('restore_backup', { filename }),
 }
 
 export function isSynapseError(e: unknown): e is SynapseError {

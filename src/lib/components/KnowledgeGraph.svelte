@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { fade } from 'svelte/transition'
   import { api, describeError, type GraphNode, type KnowledgeGraph as GraphData } from '../api'
   import { colorForIndex } from '../colors'
 
@@ -8,6 +9,8 @@
   let error = $state<string | null>(null)
   let selected = $state<string | null>(null)
   let positions = $state<Map<string, { x: number; y: number }>>(new Map())
+  let linking = $state(false)
+  let unlinkingKey = $state<string | null>(null)
 
   const width = 640
   const height = 420
@@ -95,6 +98,7 @@
   }
 
   async function onNodeClick(id: string) {
+    if (linking) return
     if (!selected) {
       selected = id
       return
@@ -105,20 +109,28 @@
     }
     const a = selected
     selected = null
+    linking = true
     try {
       await api.linkMemories(a, id)
       await load()
     } catch (e) {
       error = describeError(e)
+    } finally {
+      linking = false
     }
   }
 
   async function unlink(source: string, target: string) {
+    const key = source + target
+    if (unlinkingKey) return
+    unlinkingKey = key
     try {
       await api.unlinkMemories(source, target)
       await load()
     } catch (e) {
       error = describeError(e)
+    } finally {
+      unlinkingKey = null
     }
   }
 
@@ -143,7 +155,7 @@
   {:else if graph.nodes.length === 0}
     <p class="text-[var(--text-muted)]">Add a few memories first, then come back to link related ones.</p>
   {:else}
-    <div class="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] overflow-x-auto">
+    <div class="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] overflow-x-auto" transition:fade={{ duration: 150 }}>
       <svg viewBox={`0 0 ${width} ${height}`} class="w-full h-auto" role="img" aria-label="Knowledge graph">
         {#each graph.edges as edge (edge.source + edge.target)}
           {#if positions.get(edge.source) && positions.get(edge.target)}
@@ -161,11 +173,18 @@
           {#if positions.get(node.id)}
             <g
               transform={`translate(${positions.get(node.id)?.x}, ${positions.get(node.id)?.y})`}
-              class="cursor-pointer"
+              class={`cursor-pointer ${linking ? 'pointer-events-none opacity-60' : ''}`}
               onclick={() => onNodeClick(node.id)}
               role="button"
               tabindex="0"
-              onkeydown={(e) => e.key === 'Enter' && onNodeClick(node.id)}
+              aria-label={`${node.label} (${node.track})${selected === node.id ? ', selected' : ''}`}
+              aria-pressed={selected === node.id}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onNodeClick(node.id)
+                }
+              }}
             >
               <circle r={selected === node.id ? 10 : 7} fill={trackColor(node.track)} stroke="var(--bg-elevated)" stroke-width="2" />
               {#if selected === node.id}
@@ -199,10 +218,11 @@
             <div class="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-sm">
               <span class="text-[var(--text)]">{labelFor(edge.source)} &harr; {labelFor(edge.target)}</span>
               <button
-                class="text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors"
+                class="text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors disabled:opacity-40"
                 onclick={() => unlink(edge.source, edge.target)}
+                disabled={unlinkingKey !== null}
               >
-                Unlink
+                {unlinkingKey === edge.source + edge.target ? 'Unlinking…' : 'Unlink'}
               </button>
             </div>
           {/each}

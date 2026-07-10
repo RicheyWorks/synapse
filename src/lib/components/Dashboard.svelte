@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { fade } from 'svelte/transition'
   import { api, describeError, type Stats, type TrackSummary } from '../api'
 
   let { onStartReview }: { onStartReview: () => void } = $props()
@@ -56,7 +57,7 @@
   {:else if loading}
     <p class="text-[var(--text-muted)]">Loading…</p>
   {:else}
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4" transition:fade={{ duration: 150 }}>
       {#each tiles as tile (tile.label)}
         <div class="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
           <div class="text-xs uppercase tracking-wide text-[var(--text-muted)]">{tile.label}</div>

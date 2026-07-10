@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { fade } from 'svelte/transition'
   import { api, describeError, type CardContent, type TrackSummary } from '../api'
 
   let tracks = $state<TrackSummary[]>([])
@@ -94,7 +95,7 @@
     <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
       Track
       <input
-        class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)]"
+        class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]"
         placeholder="e.g. Rust Programming"
         list="track-names"
         bind:value={track}
@@ -109,7 +110,7 @@
     <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
       Prompt
       <textarea
-        class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] min-h-16"
+        class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)] min-h-16"
         placeholder="What triggers the recall?"
         bind:value={prompt}
       ></textarea>
@@ -126,6 +127,7 @@
                 ? 'bg-[var(--accent)] text-[var(--accent-contrast)]'
                 : 'bg-[var(--bg-inset)] text-[var(--text-muted)] hover:text-[var(--text)]'
             }`}
+            aria-pressed={cardType === ct.id}
             onclick={() => (cardType = ct.id)}
           >
             {ct.label}
@@ -138,7 +140,7 @@
       <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
         Answer
         <textarea
-          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] min-h-24"
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)] min-h-24"
           placeholder="The answer / fact to remember"
           bind:value={answer}
         ></textarea>
@@ -147,7 +149,7 @@
       <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
         Cloze text
         <textarea
-          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] min-h-24"
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)] min-h-24"
           placeholder={'The {{c1::mitochondria}} is the powerhouse of the cell'}
           bind:value={clozeText}
         ></textarea>
@@ -159,7 +161,7 @@
       <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
         Language
         <input
-          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]"
           placeholder="rust"
           bind:value={language}
         />
@@ -167,7 +169,7 @@
       <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
         Code
         <textarea
-          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] min-h-24 font-mono"
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)] min-h-24 font-mono"
           placeholder={'fn main() {}'}
           bind:value={code}
         ></textarea>
@@ -176,7 +178,7 @@
       <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
         Image path or URL
         <input
-          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]"
           placeholder="/path/to/diagram.png"
           bind:value={imagePath}
         />
@@ -184,7 +186,7 @@
       <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
         Caption (optional)
         <input
-          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]"
           bind:value={imageCaption}
         />
       </label>
@@ -213,7 +215,7 @@
     {:else if tracks.length === 0}
       <p class="text-[var(--text-muted)]">No tracks yet.</p>
     {:else}
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-col gap-2" transition:fade={{ duration: 150 }}>
         {#each tracks as t (t.name)}
           <div class="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
             <span class="text-[var(--text)]">{t.name}</span>

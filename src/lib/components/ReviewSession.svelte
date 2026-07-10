@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { fade, fly } from 'svelte/transition'
   import { api, describeError, type MemoryItem } from '../api'
   import CardView from './CardView.svelte'
 
@@ -131,7 +132,7 @@
         <span class="text-xs uppercase tracking-wide text-[var(--text-muted)]">{current.training_track}</span>
         <p class="text-xl text-[var(--text)]">{current.prompt}</p>
         {#if revealed || current.card.type === 'cloze'}
-          <div class="w-full border-t border-[var(--border)] pt-4 mt-2">
+          <div class="w-full border-t border-[var(--border)] pt-4 mt-2" in:fade={{ duration: 150 }}>
             <CardView card={current.card} {revealed} />
           </div>
         {/if}
@@ -145,7 +146,7 @@
           Reveal (Space)
         </button>
       {:else}
-        <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-2" in:fly={{ y: 8, duration: 150 }}>
           {#each qualityButtons as btn (btn.score)}
             <button
               class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-2 py-3 text-sm text-[var(--text)] hover:border-[var(--accent)] transition-colors disabled:opacity-40"
