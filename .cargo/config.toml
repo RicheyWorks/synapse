@@ -1,0 +1,4 @@
+[http]
+# Works around a Windows/schannel issue where cargo's revocation check against
+# crates.io intermittently fails with CRYPT_E_NO_REVOCATION_CHECK.
+check-revoke = false
