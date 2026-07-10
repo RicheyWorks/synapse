@@ -51,14 +51,18 @@ pub fn import_from_path(path: &Path) -> Result<Vec<MemoryItem>, SynapseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::MemoryItem;
+    use crate::domain::{CardContent, MemoryItem};
 
     #[test]
     fn export_then_import_round_trips_through_a_backup_file() {
         let dir = tempfile::tempdir().unwrap();
         let backup_path = dir.path().join("backup.json");
 
-        let item = MemoryItem::new("Biology", "What is a mitochondrion?", "The powerhouse of the cell");
+        let item = MemoryItem::new(
+            "Biology",
+            "What is a mitochondrion?",
+            CardContent::basic("The powerhouse of the cell"),
+        );
         export_to_path(&[item.clone()], &backup_path).unwrap();
 
         let restored = import_from_path(&backup_path).unwrap();
@@ -73,7 +77,7 @@ mod tests {
 
         assert!(store.load().unwrap().is_empty());
 
-        let item = MemoryItem::new("Rust", "What is a lifetime?", "A scope for borrows");
+        let item = MemoryItem::new("Rust", "What is a lifetime?", CardContent::basic("A scope for borrows"));
         store.save(&[item.clone()]).unwrap();
 
         let loaded = store.load().unwrap();

@@ -1,5 +1,7 @@
 pub mod domain;
 pub mod error;
+pub mod gamification;
+pub mod graph;
 pub mod persistence;
 pub mod scheduler;
 pub mod settings;

@@ -3,11 +3,16 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use synapse_core::domain::MemoryItem;
+use synapse_core::domain::{CardContent, MemoryItem};
 use synapse_core::error::SynapseError;
+use synapse_core::gamification::{compute_gamification, GamificationSummary};
+use synapse_core::graph::{self, KnowledgeGraph};
 use synapse_core::scheduler::{Scheduler, Sm2Scheduler};
 use synapse_core::settings::{Settings, SettingsStore};
-use synapse_core::stats::{compute_stats, list_tracks, Stats, TrackSummary};
+use synapse_core::stats::{
+    compute_stats, forgetting_curve, hardest_items, list_tracks, retention_over_time, review_heatmap,
+    HeatmapDay, RetentionPoint, Stats, TrackSummary,
+};
 use synapse_core::store::{export_to_path, import_from_path, JsonFileStore, MemoryStore};
 use tauri::Manager;
 
@@ -31,9 +36,9 @@ fn add_memory(
     state: tauri::State<'_, AppState>,
     track: String,
     prompt: String,
-    content: String,
+    card: CardContent,
 ) -> Result<MemoryItem, SynapseError> {
-    let new_item = MemoryItem::new(&track, &prompt, &content);
+    let new_item = MemoryItem::new(&track, &prompt, card);
     {
         let mut memories = state.memories.lock().unwrap();
         memories.push(new_item.clone());
@@ -134,6 +139,69 @@ fn import_memories(state: tauri::State<'_, AppState>, path: String) -> Result<us
     Ok(imported_count)
 }
 
+#[tauri::command]
+fn get_knowledge_graph(state: tauri::State<'_, AppState>) -> KnowledgeGraph {
+    let memories = state.memories.lock().unwrap();
+    graph::build_graph(&memories)
+}
+
+#[tauri::command]
+fn link_memories(state: tauri::State<'_, AppState>, id_a: String, id_b: String) -> Result<(), SynapseError> {
+    {
+        let mut memories = state.memories.lock().unwrap();
+        graph::link(&mut memories, &id_a, &id_b)?;
+    }
+    state.persist()
+}
+
+#[tauri::command]
+fn unlink_memories(state: tauri::State<'_, AppState>, id_a: String, id_b: String) -> Result<(), SynapseError> {
+    {
+        let mut memories = state.memories.lock().unwrap();
+        graph::unlink(&mut memories, &id_a, &id_b);
+    }
+    state.persist()
+}
+
+#[tauri::command]
+fn get_review_heatmap(state: tauri::State<'_, AppState>, days: u32) -> Vec<HeatmapDay> {
+    let memories = state.memories.lock().unwrap();
+    review_heatmap(&memories, days)
+}
+
+#[tauri::command]
+fn get_retention_curve(state: tauri::State<'_, AppState>) -> Vec<RetentionPoint> {
+    let memories = state.memories.lock().unwrap();
+    retention_over_time(&memories)
+}
+
+#[tauri::command]
+fn get_forgetting_curve(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    days_ahead: u32,
+) -> Result<Vec<(u32, f32)>, SynapseError> {
+    let memories = state.memories.lock().unwrap();
+    let item = memories
+        .iter()
+        .find(|m| m.id == id)
+        .ok_or_else(|| SynapseError::NotFound(id.clone()))?;
+    Ok(forgetting_curve(item, days_ahead))
+}
+
+#[tauri::command]
+fn get_hardest_items(state: tauri::State<'_, AppState>, limit: usize) -> Vec<MemoryItem> {
+    let memories = state.memories.lock().unwrap();
+    hardest_items(&memories, limit)
+}
+
+#[tauri::command]
+fn get_gamification(state: tauri::State<'_, AppState>) -> GamificationSummary {
+    let memories = state.memories.lock().unwrap();
+    let stats = compute_stats(&memories);
+    compute_gamification(&memories, &stats)
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -168,7 +236,15 @@ fn main() {
             get_settings,
             update_settings,
             export_memories,
-            import_memories
+            import_memories,
+            get_knowledge_graph,
+            link_memories,
+            unlink_memories,
+            get_review_heatmap,
+            get_retention_curve,
+            get_forgetting_curve,
+            get_hardest_items,
+            get_gamification
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -131,18 +131,99 @@ fn current_streak(dates: &[NaiveDate]) -> u32 {
     count
 }
 
+#[derive(Debug, Serialize, Clone, PartialEq)]
+pub struct HeatmapDay {
+    pub date: NaiveDate,
+    pub review_count: usize,
+}
+
+/// Review counts per calendar day for the last `days` days (inclusive of
+/// today), oldest first — suitable for a GitHub-style contribution heatmap.
+/// Days with no reviews are included with a count of 0 so the frontend
+/// doesn't have to fill gaps itself.
+pub fn review_heatmap(items: &[MemoryItem], days: u32) -> Vec<HeatmapDay> {
+    let mut counts: BTreeMap<NaiveDate, usize> = BTreeMap::new();
+    for entry in items.iter().flat_map(|i| i.review_log.iter()) {
+        *counts.entry(entry.reviewed_at.date_naive()).or_insert(0) += 1;
+    }
+
+    let today = Utc::now().date_naive();
+    let start = today - Duration::days(days.saturating_sub(1) as i64);
+    let mut out = Vec::with_capacity(days as usize);
+    let mut cursor = start;
+    while cursor <= today {
+        out.push(HeatmapDay {
+            date: cursor,
+            review_count: counts.get(&cursor).copied().unwrap_or(0),
+        });
+        cursor += Duration::days(1);
+    }
+    out
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq)]
+pub struct RetentionPoint {
+    pub date: NaiveDate,
+    pub reviews: usize,
+    pub retention_rate: f32,
+}
+
+/// Daily retention rate (fraction of that day's reviews with score >= 3),
+/// oldest first. Days with zero reviews are omitted rather than shown as 0%,
+/// since "no data" and "0% retention" are different things.
+pub fn retention_over_time(items: &[MemoryItem]) -> Vec<RetentionPoint> {
+    let mut by_day: BTreeMap<NaiveDate, (usize, usize)> = BTreeMap::new();
+    for entry in items.iter().flat_map(|i| i.review_log.iter()) {
+        let day = by_day.entry(entry.reviewed_at.date_naive()).or_insert((0, 0));
+        day.0 += 1;
+        if entry.score >= 3 {
+            day.1 += 1;
+        }
+    }
+
+    by_day
+        .into_iter()
+        .map(|(date, (total, successes))| RetentionPoint {
+            date,
+            reviews: total,
+            retention_rate: successes as f32 / total as f32,
+        })
+        .collect()
+}
+
+/// A synthetic Ebbinghaus-style forgetting curve for a single item: estimated
+/// probability of recall at each day offset from now, given its current
+/// interval and ease as a proxy for memory stability. This is a projection
+/// for the UI, not a measurement — it resets to ~100% at t=0 by construction.
+pub fn forgetting_curve(item: &MemoryItem, days_ahead: u32) -> Vec<(u32, f32)> {
+    let stability = (item.interval_days.max(1) as f32) * item.ease_factor;
+    (0..=days_ahead)
+        .map(|t| (t, (-(t as f32) / stability).exp()))
+        .collect()
+}
+
+/// The `n` items with the most lifetime lapses, worst first — the ones
+/// costing the most review time relative to what they teach.
+pub fn hardest_items(items: &[MemoryItem], n: usize) -> Vec<MemoryItem> {
+    let mut sorted: Vec<MemoryItem> = items.to_vec();
+    sorted.sort_by(|a, b| b.total_lapses.cmp(&a.total_lapses));
+    sorted.truncate(n);
+    sorted
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::CardContent;
     use crate::scheduler::{Scheduler, Sm2Scheduler};
 
     #[test]
     fn list_tracks_groups_and_counts_due_items() {
-        let mut rust_due = MemoryItem::new("Rust", "What is a trait object?", "...");
+        let mut rust_due = MemoryItem::new("Rust", "What is a trait object?", CardContent::basic("..."));
         rust_due.next_review = Utc::now() - Duration::days(1);
-        let mut rust_not_due = MemoryItem::new("Rust", "What is Copy?", "...");
+        let mut rust_not_due = MemoryItem::new("Rust", "What is Copy?", CardContent::basic("..."));
         rust_not_due.next_review = Utc::now() + Duration::days(1);
-        let mut bio = MemoryItem::new("Biology", "What is ATP?", "...");
+        let mut bio = MemoryItem::new("Biology", "What is ATP?", CardContent::basic("..."));
         bio.next_review = Utc::now() - Duration::days(1);
 
         let tracks = list_tracks(&[rust_due, rust_not_due, bio]);
@@ -168,11 +249,11 @@ mod tests {
     #[test]
     fn tracks_retention_and_leeches_across_items() {
         let scheduler = Sm2Scheduler;
-        let mut good = MemoryItem::new("Rust", "What is a slice?", "...");
+        let mut good = MemoryItem::new("Rust", "What is a slice?", CardContent::basic("..."));
         scheduler.schedule(&mut good, 5);
         scheduler.schedule(&mut good, 5);
 
-        let mut leech = MemoryItem::new("Rust", "What is variance?", "...");
+        let mut leech = MemoryItem::new("Rust", "What is variance?", CardContent::basic("..."));
         for _ in 0..8 {
             scheduler.schedule(&mut leech, 1);
         }
@@ -186,7 +267,7 @@ mod tests {
 
     #[test]
     fn streaks_count_consecutive_review_days() {
-        let mut item = MemoryItem::new("Rust", "prompt", "content");
+        let mut item = MemoryItem::new("Rust", "prompt", CardContent::basic("content"));
         let today = Utc::now();
         item.review_log = vec![
             crate::domain::ReviewLogEntry {
@@ -219,7 +300,7 @@ mod tests {
 
     #[test]
     fn streak_breaks_after_a_missed_day() {
-        let mut item = MemoryItem::new("Rust", "prompt", "content");
+        let mut item = MemoryItem::new("Rust", "prompt", CardContent::basic("content"));
         let today = Utc::now();
         item.review_log = vec![
             crate::domain::ReviewLogEntry {
@@ -241,5 +322,73 @@ mod tests {
         let stats = compute_stats(&[item]);
         assert_eq!(stats.current_streak_days, 1);
         assert_eq!(stats.best_streak_days, 1);
+    }
+
+    #[test]
+    fn heatmap_covers_every_day_in_range_including_zero_days() {
+        let mut item = MemoryItem::new("Rust", "prompt", CardContent::basic("content"));
+        item.review_log = vec![crate::domain::ReviewLogEntry {
+            reviewed_at: Utc::now(),
+            score: 5,
+            interval_before_days: 0,
+            interval_after_days: 1,
+            ease_factor_after: 2.5,
+        }];
+
+        let heatmap = review_heatmap(&[item], 7);
+        assert_eq!(heatmap.len(), 7);
+        assert_eq!(heatmap.last().unwrap().review_count, 1);
+        assert_eq!(heatmap.first().unwrap().review_count, 0);
+    }
+
+    #[test]
+    fn retention_over_time_groups_by_day_and_omits_empty_days() {
+        let mut item = MemoryItem::new("Rust", "prompt", CardContent::basic("content"));
+        let today = Utc::now();
+        item.review_log = vec![
+            crate::domain::ReviewLogEntry {
+                reviewed_at: today,
+                score: 5,
+                interval_before_days: 0,
+                interval_after_days: 1,
+                ease_factor_after: 2.5,
+            },
+            crate::domain::ReviewLogEntry {
+                reviewed_at: today,
+                score: 1,
+                interval_before_days: 1,
+                interval_after_days: 1,
+                ease_factor_after: 2.5,
+            },
+        ];
+
+        let curve = retention_over_time(&[item]);
+        assert_eq!(curve.len(), 1);
+        assert_eq!(curve[0].reviews, 2);
+        assert!((curve[0].retention_rate - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn forgetting_curve_starts_at_full_recall_and_decays() {
+        let mut item = MemoryItem::new("Rust", "prompt", CardContent::basic("content"));
+        item.interval_days = 10;
+        item.ease_factor = 2.5;
+
+        let curve = forgetting_curve(&item, 30);
+        assert_eq!(curve[0], (0, 1.0));
+        assert!(curve.last().unwrap().1 < curve[0].1);
+        assert!(curve.windows(2).all(|w| w[1].1 <= w[0].1));
+    }
+
+    #[test]
+    fn hardest_items_sorts_by_lifetime_lapses_descending() {
+        let mut low = MemoryItem::new("Rust", "easy", CardContent::basic("..."));
+        low.total_lapses = 1;
+        let mut high = MemoryItem::new("Rust", "hard", CardContent::basic("..."));
+        high.total_lapses = 9;
+
+        let worst = hardest_items(&[low, high], 1);
+        assert_eq!(worst.len(), 1);
+        assert_eq!(worst[0].prompt, "hard");
     }
 }

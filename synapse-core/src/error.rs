@@ -17,6 +17,9 @@ pub enum SynapseError {
 
     #[error("failed to (de)serialize memory data: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    #[error("invalid operation: {0}")]
+    InvalidOperation(String),
 }
 
 impl SynapseError {
@@ -27,6 +30,7 @@ impl SynapseError {
             SynapseError::NotFound(_) => "NotFound",
             SynapseError::Io { .. } => "Io",
             SynapseError::Serialization(_) => "Serialization",
+            SynapseError::InvalidOperation(_) => "InvalidOperation",
         }
     }
 }

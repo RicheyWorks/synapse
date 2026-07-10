@@ -57,10 +57,11 @@ impl Scheduler for Sm2Scheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::CardContent;
 
     #[test]
     fn successful_reviews_grow_interval_and_log_history() {
-        let mut item = MemoryItem::new("Rust", "What is a trait?", "A shared interface");
+        let mut item = MemoryItem::new("Rust", "What is a trait?", CardContent::basic("A shared interface"));
         let scheduler = Sm2Scheduler;
 
         scheduler.schedule(&mut item, 5);
@@ -82,7 +83,7 @@ mod tests {
 
     #[test]
     fn failed_review_resets_repetitions_without_dropping_ease_below_floor() {
-        let mut item = MemoryItem::new("Rust", "What is Send?", "Safe to move across threads");
+        let mut item = MemoryItem::new("Rust", "What is Send?", CardContent::basic("Safe to move across threads"));
         let scheduler = Sm2Scheduler;
         item.ease_factor = 1.3;
 
@@ -97,7 +98,7 @@ mod tests {
 
     #[test]
     fn a_success_resets_consecutive_lapses_but_not_lifetime_total() {
-        let mut item = MemoryItem::new("Rust", "What is a lifetime?", "...");
+        let mut item = MemoryItem::new("Rust", "What is a lifetime?", CardContent::basic("..."));
         let scheduler = Sm2Scheduler;
 
         scheduler.schedule(&mut item, 1);
