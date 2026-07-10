@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use synapse_core::backup::{self, BackupInfo};
 use synapse_core::domain::{CardContent, MemoryItem};
 use synapse_core::error::SynapseError;
+use synapse_core::fsrs::FsrsScheduler;
 use synapse_core::gamification::{compute_gamification, GamificationSummary};
 use synapse_core::graph::{self, KnowledgeGraph};
 use synapse_core::scheduler::{Scheduler, Sm2Scheduler};
@@ -23,7 +24,7 @@ struct AppState {
     settings: Mutex<Settings>,
     store: JsonFileStore,
     settings_store: SettingsStore,
-    scheduler: Sm2Scheduler,
+    sm2_scheduler: Sm2Scheduler,
     backup_dir: PathBuf,
 }
 
@@ -58,11 +59,15 @@ fn review_memory(
 ) -> Result<MemoryItem, SynapseError> {
     let updated = {
         let mut memories = state.memories.lock().unwrap();
+        let settings = state.settings.lock().unwrap();
         let item = memories
             .iter_mut()
             .find(|m| m.id == id)
             .ok_or_else(|| SynapseError::NotFound(id.clone()))?;
-        state.scheduler.schedule(item, score);
+        match settings.scheduler.as_str() {
+            "fsrs" => FsrsScheduler::new(settings.fsrs_desired_retention as f64).schedule(item, score),
+            _ => state.sm2_scheduler.schedule(item, score),
+        }
         item.clone()
     };
     state.persist()?;
@@ -257,7 +262,7 @@ fn main() {
                 settings: Mutex::new(settings),
                 store,
                 settings_store,
-                scheduler: Sm2Scheduler,
+                sm2_scheduler: Sm2Scheduler,
                 backup_dir: data_dir.join("backups"),
             });
 

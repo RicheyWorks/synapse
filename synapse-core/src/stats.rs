@@ -191,15 +191,37 @@ pub fn retention_over_time(items: &[MemoryItem]) -> Vec<RetentionPoint> {
         .collect()
 }
 
-/// A synthetic Ebbinghaus-style forgetting curve for a single item: estimated
-/// probability of recall at each day offset from now, given its current
-/// interval and ease as a proxy for memory stability. This is a projection
-/// for the UI, not a measurement — it resets to ~100% at t=0 by construction.
+/// A forgetting curve for a single item: estimated probability of recall at
+/// each day offset from now. Items scheduled by `FsrsScheduler` carry a real
+/// FSRS stability value, used directly. Items still on `Sm2Scheduler` have no
+/// such measurement, so this falls back to a synthetic Ebbinghaus-style
+/// exponential decay using interval/ease as a stability proxy. Either way this
+/// is a projection for the UI, not a measurement — it resets to ~100% at t=0
+/// by construction.
 pub fn forgetting_curve(item: &MemoryItem, days_ahead: u32) -> Vec<(u32, f32)> {
-    let stability = (item.interval_days.max(1) as f32) * item.ease_factor;
-    (0..=days_ahead)
-        .map(|t| (t, (-(t as f32) / stability).exp()))
-        .collect()
+    match item.stability {
+        Some(stability) => {
+            let factor = fsrs_factor();
+            (0..=days_ahead)
+                .map(|t| (t, (1.0 + factor * t as f64 / stability).powf(FSRS_DECAY) as f32))
+                .collect()
+        }
+        None => {
+            let stability = (item.interval_days.max(1) as f32) * item.ease_factor;
+            (0..=days_ahead)
+                .map(|t| (t, (-(t as f32) / stability).exp()))
+                .collect()
+        }
+    }
+}
+
+/// Mirrors `FsrsScheduler`'s default decay/factor (the default w[20], not a
+/// desired_retention-dependent value) so this projection matches what
+/// actually produced the item's `stability`, without stats.rs depending on
+/// the fsrs module's internals.
+const FSRS_DECAY: f64 = -0.1542;
+fn fsrs_factor() -> f64 {
+    0.9_f64.powf(1.0 / FSRS_DECAY) - 1.0
 }
 
 /// The `n` items with the most lifetime lapses, worst first — the ones
@@ -276,6 +298,8 @@ mod tests {
                 interval_before_days: 0,
                 interval_after_days: 1,
                 ease_factor_after: 2.5,
+                difficulty_after: None,
+                stability_after: None,
             },
             crate::domain::ReviewLogEntry {
                 reviewed_at: today - Duration::days(1),
@@ -283,6 +307,8 @@ mod tests {
                 interval_before_days: 1,
                 interval_after_days: 6,
                 ease_factor_after: 2.5,
+                difficulty_after: None,
+                stability_after: None,
             },
             crate::domain::ReviewLogEntry {
                 reviewed_at: today,
@@ -290,6 +316,8 @@ mod tests {
                 interval_before_days: 6,
                 interval_after_days: 10,
                 ease_factor_after: 2.5,
+                difficulty_after: None,
+                stability_after: None,
             },
         ];
 
@@ -309,6 +337,8 @@ mod tests {
                 interval_before_days: 0,
                 interval_after_days: 1,
                 ease_factor_after: 2.5,
+                difficulty_after: None,
+                stability_after: None,
             },
             crate::domain::ReviewLogEntry {
                 reviewed_at: today,
@@ -316,6 +346,8 @@ mod tests {
                 interval_before_days: 1,
                 interval_after_days: 6,
                 ease_factor_after: 2.5,
+                difficulty_after: None,
+                stability_after: None,
             },
         ];
 
@@ -333,6 +365,8 @@ mod tests {
             interval_before_days: 0,
             interval_after_days: 1,
             ease_factor_after: 2.5,
+            difficulty_after: None,
+            stability_after: None,
         }];
 
         let heatmap = review_heatmap(&[item], 7);
@@ -352,6 +386,8 @@ mod tests {
                 interval_before_days: 0,
                 interval_after_days: 1,
                 ease_factor_after: 2.5,
+                difficulty_after: None,
+                stability_after: None,
             },
             crate::domain::ReviewLogEntry {
                 reviewed_at: today,
@@ -359,6 +395,8 @@ mod tests {
                 interval_before_days: 1,
                 interval_after_days: 1,
                 ease_factor_after: 2.5,
+                difficulty_after: None,
+                stability_after: None,
             },
         ];
 

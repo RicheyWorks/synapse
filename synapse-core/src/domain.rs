@@ -10,6 +10,11 @@ pub struct ReviewLogEntry {
     pub interval_before_days: u32,
     pub interval_after_days: u32,
     pub ease_factor_after: f32,
+    /// Set only when this review was scheduled by `FsrsScheduler`; `None` for SM-2 reviews.
+    #[serde(default)]
+    pub difficulty_after: Option<f64>,
+    #[serde(default)]
+    pub stability_after: Option<f64>,
 }
 
 /// The actual recall material for a card. Tagged so the frontend can render
@@ -59,6 +64,14 @@ pub struct MemoryItem {
     /// are kept symmetric: linking A to B adds B to A's list and vice versa.
     #[serde(default)]
     pub related_ids: Vec<String>,
+    /// FSRS memory difficulty (1-10). `None` until the item is first
+    /// reviewed under `FsrsScheduler`; unused by `Sm2Scheduler`.
+    #[serde(default)]
+    pub difficulty: Option<f64>,
+    /// FSRS memory stability, in days. `None` until first reviewed under
+    /// `FsrsScheduler`; unused by `Sm2Scheduler`.
+    #[serde(default)]
+    pub stability: Option<f64>,
 }
 
 /// A memory that keeps failing review is a "leech": it's costing more review
@@ -82,6 +95,8 @@ impl MemoryItem {
             lapses: 0,
             total_lapses: 0,
             related_ids: Vec::new(),
+            difficulty: None,
+            stability: None,
         }
     }
 

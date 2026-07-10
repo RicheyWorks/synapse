@@ -50,6 +50,8 @@ impl Scheduler for Sm2Scheduler {
             interval_before_days: interval_before,
             interval_after_days: item.interval_days,
             ease_factor_after: item.ease_factor,
+            difficulty_after: None,
+            stability_after: None,
         });
     }
 }

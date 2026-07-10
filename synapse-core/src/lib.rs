@@ -1,6 +1,7 @@
 pub mod backup;
 pub mod domain;
 pub mod error;
+pub mod fsrs;
 pub mod gamification;
 pub mod graph;
 pub mod persistence;

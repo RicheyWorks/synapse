@@ -13,6 +13,14 @@ fn default_theme() -> String {
     "neural".to_string()
 }
 
+fn default_scheduler() -> String {
+    "sm2".to_string()
+}
+
+fn default_fsrs_desired_retention() -> f32 {
+    0.9
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Settings {
     /// Max number of items a review session pulls in at once, by default.
@@ -21,6 +29,15 @@ pub struct Settings {
     /// UI theme id, e.g. "neural" (default) or "blackbeard".
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// Which `Scheduler` reviews are run through: "sm2" (default) or "fsrs".
+    /// Existing items keep whatever fields their prior scheduler set; switching
+    /// takes effect on each item's next review, there's no bulk migration.
+    #[serde(default = "default_scheduler")]
+    pub scheduler: String,
+    /// FSRS's target probability of recall at the scheduled review (0.7-0.99).
+    /// Unused when `scheduler` is "sm2".
+    #[serde(default = "default_fsrs_desired_retention")]
+    pub fsrs_desired_retention: f32,
 }
 
 impl Default for Settings {
@@ -28,6 +45,8 @@ impl Default for Settings {
         Self {
             daily_review_limit: default_daily_review_limit(),
             theme: default_theme(),
+            scheduler: default_scheduler(),
+            fsrs_desired_retention: default_fsrs_desired_retention(),
         }
     }
 }
@@ -72,6 +91,8 @@ mod tests {
         let custom = Settings {
             daily_review_limit: 50,
             theme: "blackbeard".to_string(),
+            scheduler: "fsrs".to_string(),
+            fsrs_desired_retention: 0.85,
         };
         store.save(&custom).unwrap();
 
