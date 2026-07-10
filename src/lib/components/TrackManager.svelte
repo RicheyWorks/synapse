@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { fade } from 'svelte/transition'
+  import { open } from '@tauri-apps/api/dialog'
   import { api, describeError, type CardContent, type TrackSummary } from '../api'
 
   let tracks = $state<TrackSummary[]>([])
@@ -18,7 +19,9 @@
   let language = $state('')
   let code = $state('')
   let imagePath = $state('')
+  let imagePickedName = $state('')
   let imageCaption = $state('')
+  let importingImage = $state(false)
 
   const cardTypes: { id: CardContent['type']; label: string }[] = [
     { id: 'basic', label: 'Basic' },
@@ -62,7 +65,27 @@
     language = ''
     code = ''
     imagePath = ''
+    imagePickedName = ''
     imageCaption = ''
+  }
+
+  async function pickImage() {
+    const selected = await open({
+      title: 'Choose an image',
+      multiple: false,
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] }],
+    })
+    if (!selected || Array.isArray(selected)) return
+    error = null
+    importingImage = true
+    try {
+      imagePath = await api.importImageAsset(selected)
+      imagePickedName = selected.split(/[\\/]/).pop() ?? selected
+    } catch (e) {
+      error = describeError(e)
+    } finally {
+      importingImage = false
+    }
   }
 
   async function submit(e: Event) {
@@ -175,14 +198,25 @@
         ></textarea>
       </label>
     {:else if cardType === 'image'}
-      <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
-        Image path or URL
-        <input
-          class="rounded-lg border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]"
-          placeholder="/path/to/diagram.png"
-          bind:value={imagePath}
-        />
-      </label>
+      <div class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
+        Image
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            class="self-start rounded-lg px-3 py-1.5 text-sm font-medium border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] transition-colors disabled:opacity-40"
+            onclick={pickImage}
+            disabled={importingImage}
+          >
+            {importingImage ? 'Importing…' : 'Choose image…'}
+          </button>
+          {#if imagePickedName}
+            <span class="text-[var(--text)] text-sm">{imagePickedName}</span>
+          {/if}
+        </div>
+        <span class="text-xs">
+          Copied into the app's own data folder on import, so the card keeps working even if the original file moves.
+        </span>
+      </div>
       <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
         Caption (optional)
         <input

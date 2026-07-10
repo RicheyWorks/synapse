@@ -1,4 +1,5 @@
-import { invoke as tauriInvoke } from '@tauri-apps/api/tauri'
+import { invoke as tauriInvoke, convertFileSrc } from '@tauri-apps/api/tauri'
+import { appDataDir } from '@tauri-apps/api/path'
 
 export interface ReviewLogEntry {
   reviewed_at: string
@@ -124,6 +125,10 @@ export const api = {
   addMemory: (track: string, prompt: string, card: CardContent) =>
     invoke<MemoryItem>('add_memory', { track, prompt, card }),
 
+  /** Copies a user-picked image into the app's own data dir; returns a relative
+   *  path (e.g. "assets/<uuid>.png") to store in a CardContent::Image. */
+  importImageAsset: (sourcePath: string) => invoke<string>('import_image_asset', { sourcePath }),
+
   reviewMemory: (id: string, score: number) => invoke<MemoryItem>('review_memory', { id, score }),
 
   getDueMemories: () => invoke<MemoryItem[]>('get_due_memories'),
@@ -167,6 +172,25 @@ export const api = {
   listBackups: () => invoke<BackupInfo[]>('list_backups'),
 
   restoreBackup: (filename: string) => invoke<number>('restore_backup', { filename }),
+}
+
+let cachedAppDataDir: Promise<string> | null = null
+
+/**
+ * Resolves a CardContent::Image path to a real `<img src>`-able URL.
+ * - Real http(s) URLs pass through unchanged.
+ * - Paths already imported via `api.importImageAsset` are relative to the app
+ *   data dir (e.g. "assets/<uuid>.png") and get joined + converted.
+ * - Anything else (a raw absolute path, e.g. from data created before this
+ *   existed) is passed to convertFileSrc as-is.
+ */
+export async function assetSrc(path: string): Promise<string> {
+  if (/^https?:\/\//i.test(path)) return path
+  if (!path.startsWith('assets/')) return convertFileSrc(path)
+
+  if (!cachedAppDataDir) cachedAppDataDir = appDataDir()
+  const dir = await cachedAppDataDir
+  return convertFileSrc(`${dir.replace(/[\\/]+$/, '')}/${path}`)
 }
 
 export function isSynapseError(e: unknown): e is SynapseError {

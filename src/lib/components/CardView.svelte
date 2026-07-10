@@ -10,7 +10,7 @@
   import 'prismjs/components/prism-markup'
   import 'prismjs/components/prism-rust'
   import 'prismjs/components/prism-sql'
-  import type { CardContent } from '../api'
+  import { assetSrc, type CardContent } from '../api'
   import { colorForIndex } from '../colors'
 
   let { card, revealed }: { card: CardContent; revealed: boolean } = $props()
@@ -127,7 +127,13 @@
 {:else if card.type === 'image'}
   {#if revealed}
     <div class="flex flex-col items-center gap-2">
-      <img src={card.path} alt={card.caption ?? ''} class="max-w-full max-h-64 rounded-lg border border-[var(--border)]" />
+      {#await assetSrc(card.path)}
+        <div class="text-sm text-[var(--text-muted)]">Loading image…</div>
+      {:then src}
+        <img {src} alt={card.caption ?? ''} class="max-w-full max-h-64 rounded-lg border border-[var(--border)]" />
+      {:catch}
+        <div class="text-sm text-[var(--danger)]">Couldn't load this image.</div>
+      {/await}
       {#if card.caption}<p class="text-sm text-[var(--text-muted)]">{card.caption}</p>{/if}
     </div>
   {/if}

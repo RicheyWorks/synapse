@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use synapse_core::assets;
 use synapse_core::backup::{self, BackupInfo};
 use synapse_core::domain::{CardContent, MemoryItem};
 use synapse_core::error::SynapseError;
@@ -26,6 +27,7 @@ struct AppState {
     settings_store: SettingsStore,
     sm2_scheduler: Sm2Scheduler,
     backup_dir: PathBuf,
+    assets_dir: PathBuf,
 }
 
 impl AppState {
@@ -49,6 +51,15 @@ fn add_memory(
     }
     state.persist()?;
     Ok(new_item)
+}
+
+/// Copies a user-picked image file into the app's own data directory so an
+/// Image card no longer depends on the source file's original location.
+/// Returns a path relative to the app data dir (e.g. "assets/<uuid>.png") for
+/// storage in `CardContent::Image::path`.
+#[tauri::command]
+fn import_image_asset(state: tauri::State<'_, AppState>, source_path: String) -> Result<String, SynapseError> {
+    assets::import_asset(Path::new(&source_path), &state.assets_dir)
 }
 
 #[tauri::command]
@@ -264,6 +275,7 @@ fn main() {
                 settings_store,
                 sm2_scheduler: Sm2Scheduler,
                 backup_dir: data_dir.join("backups"),
+                assets_dir: data_dir.join("assets"),
             });
 
             // Restore last known window geometry, then save it again on close so
@@ -297,6 +309,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             add_memory,
+            import_image_asset,
             review_memory,
             get_due_memories,
             get_all_memories,
