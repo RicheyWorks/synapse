@@ -8,7 +8,7 @@ Everything lives on disk as JSON in your OS's app-data directory. Nothing leaves
 
 - **Two schedulers, your choice** — classic SM-2, or [FSRS-6](https://github.com/open-spaced-repetition), a modern difficulty/stability model that generally schedules more accurately. Switchable per-vault in Settings; existing cards keep whatever scheduler last reviewed them, so switching is never destructive.
 - **Lapse & leech tracking** — cards you keep failing get flagged instead of silently piling up.
-- **Multiple card types** — Basic (prompt/answer), Cloze deletion (with Anki-style `{{c1::answer::hint}}` hints), syntax-highlighted Code snippets, and Image cards.
+- **Multiple card types** — Basic (prompt/answer), Cloze deletion (with Anki-style `{{c1::answer::hint}}` hints), syntax-highlighted Code snippets, and Image cards (picked via a native file dialog and copied into the vault's own data directory, so they survive the source file moving or being deleted).
 - **Knowledge graph** — link related memories and explore the connections in a draggable, zoomable force-directed graph.
 - **Analytics** — retention rate, review streaks, a GitHub-style review heatmap, retention-over-time, and per-item forgetting-curve projections (using real FSRS stability when available, a synthetic estimate otherwise).
 - **Gamification** — XP, levels, and achievements derived live from your review history (nothing to get out of sync — there's no separate XP counter to corrupt).
@@ -41,6 +41,7 @@ synapse/
 │       ├── stats.rs         # Retention, streaks, heatmap, forgetting curve
 │       ├── graph.rs         # Knowledge graph (linking, traversal)
 │       ├── gamification.rs  # XP/level/title/achievements
+│       ├── assets.rs        # Copies picked images into the vault's own data dir
 │       ├── persistence.rs   # Shared atomic read/write JSON helpers
 │       └── error.rs         # SynapseError (typed, frontend-serializable)
 ├── src-tauri/           # Tauri command surface + app bootstrap (package: "synapse")
@@ -118,12 +119,12 @@ Two follow-up passes after Phase 5 wrapped:
 
 - **Frontend depth pass** — post-score interval feedback, Anki-style cloze hints, real Prism.js syntax highlighting, and a draggable/zoomable knowledge graph.
 - **FSRS-6 scheduler** — a second `Scheduler` implementation alongside SM-2, selectable per-vault in Settings. Ported directly from the official reference implementation's source, not a paraphrase (see `synapse-core/src/fsrs.rs` for why that distinction mattered).
+- **Image asset management** — picked images are copied into the vault's own data directory instead of referenced by their original path (`synapse-core/src/assets.rs`).
 
 ### Not yet built
 
 Reviewed and consciously deferred, not overlooked:
 
-- **Image asset management** — `CardContent::Image` currently stores a raw path/URL string; no copy-into-appdata or validation, so an image card can break if the source file moves.
 - **Multi-device sync** — by design this app is local-first; the only cross-device path today is manual export/import of an unencrypted JSON file.
 - **Mobile companion** — this app targets Tauri v1 (desktop). A mobile build would mean Tauri v2, a separate migration.
 - **Performance at scale** — untested with thousands of items. The JSON-full-load-into-memory architecture is simple and fine for personal use, but hasn't been benchmarked at scale.
