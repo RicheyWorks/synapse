@@ -1,3 +1,4 @@
+pub mod backup;
 pub mod domain;
 pub mod error;
 pub mod gamification;
@@ -7,3 +8,4 @@ pub mod scheduler;
 pub mod settings;
 pub mod stats;
 pub mod store;
+pub mod window_state;

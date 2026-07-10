@@ -1,8 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use synapse_core::backup::{self, BackupInfo};
 use synapse_core::domain::{CardContent, MemoryItem};
 use synapse_core::error::SynapseError;
 use synapse_core::gamification::{compute_gamification, GamificationSummary};
@@ -14,6 +15,7 @@ use synapse_core::stats::{
     HeatmapDay, RetentionPoint, Stats, TrackSummary,
 };
 use synapse_core::store::{export_to_path, import_from_path, JsonFileStore, MemoryStore};
+use synapse_core::window_state::{WindowState, WindowStateStore};
 use tauri::Manager;
 
 struct AppState {
@@ -22,6 +24,7 @@ struct AppState {
     store: JsonFileStore,
     settings_store: SettingsStore,
     scheduler: Sm2Scheduler,
+    backup_dir: PathBuf,
 }
 
 impl AppState {
@@ -122,12 +125,15 @@ fn export_memories(state: tauri::State<'_, AppState>, path: String) -> Result<()
 
 /// Merges items from a backup file into the current set: items whose id already
 /// exists are overwritten, new ids are appended. Returns the number imported.
+/// Snapshots the pre-import state first, so a bad import is always undoable
+/// via `restore_backup`.
 #[tauri::command]
 fn import_memories(state: tauri::State<'_, AppState>, path: String) -> Result<usize, SynapseError> {
     let imported = import_from_path(Path::new(&path))?;
     let imported_count = imported.len();
     {
         let mut memories = state.memories.lock().unwrap();
+        backup::create_backup(&memories, &state.backup_dir)?;
         for item in imported {
             match memories.iter_mut().find(|m| m.id == item.id) {
                 Some(existing) => *existing = item,
@@ -137,6 +143,33 @@ fn import_memories(state: tauri::State<'_, AppState>, path: String) -> Result<us
     }
     state.persist()?;
     Ok(imported_count)
+}
+
+/// Manually snapshots the current vault. Returns the backup's filename.
+#[tauri::command]
+fn create_manual_backup(state: tauri::State<'_, AppState>) -> Result<String, SynapseError> {
+    let memories = state.memories.lock().unwrap();
+    backup::create_backup(&memories, &state.backup_dir)
+}
+
+#[tauri::command]
+fn list_backups(state: tauri::State<'_, AppState>) -> Result<Vec<BackupInfo>, SynapseError> {
+    backup::list_backups(&state.backup_dir)
+}
+
+/// Replaces the entire current vault with the contents of a backup file.
+/// Snapshots the pre-restore state first, in case the restore itself was a mistake.
+#[tauri::command]
+fn restore_backup(state: tauri::State<'_, AppState>, filename: String) -> Result<usize, SynapseError> {
+    let restored = backup::restore_backup(&state.backup_dir, &filename)?;
+    let restored_count = restored.len();
+    {
+        let mut memories = state.memories.lock().unwrap();
+        backup::create_backup(&memories, &state.backup_dir)?;
+        *memories = restored;
+    }
+    state.persist()?;
+    Ok(restored_count)
 }
 
 #[tauri::command]
@@ -216,13 +249,45 @@ fn main() {
             let settings_store = SettingsStore::new(data_dir.join("settings.json"));
             let settings = settings_store.load().expect("failed to load settings");
 
+            let window_state_store = WindowStateStore::new(data_dir.join("window_state.json"));
+            let window_state = window_state_store.load().unwrap_or_default();
+
             app.manage(AppState {
                 memories: Mutex::new(memories),
                 settings: Mutex::new(settings),
                 store,
                 settings_store,
                 scheduler: Sm2Scheduler,
+                backup_dir: data_dir.join("backups"),
             });
+
+            // Restore last known window geometry, then save it again on close so
+            // it persists across launches. Position is skipped on first run
+            // (None) so the OS picks a sane default placement instead of (0, 0).
+            let window = app.get_window("main").expect("main window must exist");
+            let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                width: window_state.width,
+                height: window_state.height,
+            }));
+            if let (Some(x), Some(y)) = (window_state.x, window_state.y) {
+                let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+            }
+
+            let closing_window = window.clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    if let (Ok(size), Ok(position)) = (closing_window.outer_size(), closing_window.outer_position()) {
+                        let state = WindowState {
+                            x: Some(position.x),
+                            y: Some(position.y),
+                            width: size.width,
+                            height: size.height,
+                        };
+                        let _ = window_state_store.save(&state);
+                    }
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -244,7 +309,10 @@ fn main() {
             get_retention_curve,
             get_forgetting_curve,
             get_hardest_items,
-            get_gamification
+            get_gamification,
+            create_manual_backup,
+            list_backups,
+            restore_backup
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
