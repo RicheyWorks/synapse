@@ -91,7 +91,15 @@ npm run build              # production frontend build
 cargo build --release --workspace
 ```
 
-The release profile (workspace `Cargo.toml`) enables LTO, single codegen unit, and symbol stripping for a smaller, faster binary (`target/release/synapse.exe` on Windows, ~7MB). `cargo tauri build` should produce a full platform installer using the same profile, but that path hasn't been exercised end-to-end yet — see "Not yet built" below.
+The release profile (workspace `Cargo.toml`) enables LTO, single codegen unit, and symbol stripping for a smaller, faster binary (`target/release/synapse.exe` on Windows, ~7MB).
+
+### Building an installer
+
+```bash
+cargo tauri build
+```
+
+Produces a real Windows installer via WiX (`.msi`) and NSIS (`.exe`) in `target/release/bundle/`. Note: `cargo tauri build` requires `--features custom-protocol` on `src-tauri`, which is now declared in `src-tauri/Cargo.toml` (a gap in the original scaffold — it wasn't caught until someone actually ran a release build). No code signing or auto-update yet — see "Not yet built" below.
 
 ## Data location
 
@@ -120,6 +128,7 @@ Two follow-up passes after Phase 5 wrapped:
 - **Frontend depth pass** — post-score interval feedback, Anki-style cloze hints, real Prism.js syntax highlighting, and a draggable/zoomable knowledge graph.
 - **FSRS-6 scheduler** — a second `Scheduler` implementation alongside SM-2, selectable per-vault in Settings. Ported directly from the official reference implementation's source, not a paraphrase (see `synapse-core/src/fsrs.rs` for why that distinction mattered).
 - **Image asset management** — picked images are copied into the vault's own data directory instead of referenced by their original path (`synapse-core/src/assets.rs`).
+- **Working installer build** — `cargo tauri build` produces a real MSI and NSIS installer (fixed a missing `custom-protocol` Cargo feature that made this fail outright).
 
 ### Not yet built
 
@@ -128,4 +137,4 @@ Reviewed and consciously deferred, not overlooked:
 - **Multi-device sync** — by design this app is local-first; the only cross-device path today is manual export/import of an unencrypted JSON file.
 - **Mobile companion** — this app targets Tauri v1 (desktop). A mobile build would mean Tauri v2, a separate migration.
 - **Performance at scale** — untested with thousands of items. The JSON-full-load-into-memory architecture is simple and fine for personal use, but hasn't been benchmarked at scale.
-- **Real distribution** — `cargo tauri build` (installer bundling), auto-update, and code signing are unfinished. Signing in particular needs a purchased identity/certificate — a deliberate decision, not a default next step.
+- **Auto-update and code signing** — the installer itself now works; signing needs a purchased identity/certificate — a deliberate decision, not a default next step.
