@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { fade } from 'svelte/transition'
   import { save, open } from '@tauri-apps/api/dialog'
-  import { api, describeError, type BackupInfo, type Settings, type ThemeId } from '../api'
+  import { api, describeError, type BackupInfo, type SchedulerId, type Settings, type ThemeId } from '../api'
   import ConfirmDialog from './ConfirmDialog.svelte'
 
   let {
@@ -29,6 +29,11 @@
     { id: 'blackbeard', label: 'Blackbeard', description: 'Pirate-flavored, still sharp' },
   ]
 
+  const schedulers: { id: SchedulerId; label: string; description: string }[] = [
+    { id: 'sm2', label: 'SM-2', description: 'Classic, predictable, ease-factor based' },
+    { id: 'fsrs', label: 'FSRS', description: 'Modern, models per-memory difficulty and stability' },
+  ]
+
   async function persist(next: Settings) {
     saving = true
     error = null
@@ -50,6 +55,16 @@
     const value = Number((e.target as HTMLInputElement).value)
     if (!Number.isFinite(value) || value <= 0) return
     persist({ ...settings, daily_review_limit: value })
+  }
+
+  function setScheduler(id: SchedulerId) {
+    persist({ ...settings, scheduler: id })
+  }
+
+  function setDesiredRetention(e: Event) {
+    const percent = Number((e.target as HTMLInputElement).value)
+    if (!Number.isFinite(percent)) return
+    persist({ ...settings, fsrs_desired_retention: percent / 100 })
   }
 
   async function doExport() {
@@ -193,6 +208,45 @@
         disabled={saving}
       />
     </label>
+  </section>
+
+  <section class="flex flex-col gap-3">
+    <h2 class="text-lg font-medium text-[var(--text)] m-0">Scheduling algorithm</h2>
+    <p class="text-sm text-[var(--text-muted)] m-0">
+      Switching takes effect the next time each memory is reviewed — existing items keep whatever
+      their prior scheduler already set, there's no bulk migration.
+    </p>
+    <div class="grid grid-cols-2 gap-3">
+      {#each schedulers as sched (sched.id)}
+        <button
+          class={`text-left rounded-xl border p-4 transition-colors ${
+            settings.scheduler === sched.id ? 'border-[var(--accent)]' : 'border-[var(--border)]'
+          }`}
+          style="background: var(--bg-elevated);"
+          aria-pressed={settings.scheduler === sched.id}
+          onclick={() => setScheduler(sched.id)}
+          disabled={saving}
+        >
+          <div class="font-medium text-[var(--text)]">{sched.label}</div>
+          <div class="text-sm text-[var(--text-muted)]">{sched.description}</div>
+        </button>
+      {/each}
+    </div>
+
+    {#if settings.scheduler === 'fsrs'}
+      <label class="flex flex-col gap-1 text-sm text-[var(--text-muted)] max-w-xs" transition:fade={{ duration: 150 }}>
+        Desired retention: {Math.round(settings.fsrs_desired_retention * 100)}%
+        <input
+          type="range"
+          min="70"
+          max="99"
+          value={Math.round(settings.fsrs_desired_retention * 100)}
+          onchange={setDesiredRetention}
+          disabled={saving}
+        />
+        <span class="text-xs">Higher means shorter, more frequent reviews.</span>
+      </label>
+    {/if}
   </section>
 
   <section class="flex flex-col gap-3">

@@ -12,7 +12,12 @@
   type View = 'dashboard' | 'review' | 'tracks' | 'graph' | 'insights' | 'settings'
 
   let view = $state<View>('dashboard')
-  let settings = $state<Settings>({ daily_review_limit: 20, theme: 'neural' })
+  let settings = $state<Settings>({
+    daily_review_limit: 20,
+    theme: 'neural',
+    scheduler: 'sm2',
+    fsrs_desired_retention: 0.9,
+  })
   let loadError = $state<string | null>(null)
 
   onMount(async () => {

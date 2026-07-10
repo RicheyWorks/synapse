@@ -6,6 +6,9 @@ export interface ReviewLogEntry {
   interval_before_days: number
   interval_after_days: number
   ease_factor_after: number
+  /** Set only when this review was scheduled by FSRS. */
+  difficulty_after: number | null
+  stability_after: number | null
 }
 
 export type CardContent =
@@ -28,6 +31,9 @@ export interface MemoryItem {
   lapses: number
   total_lapses: number
   related_ids: string[]
+  /** FSRS memory difficulty/stability; null until first reviewed under FSRS. */
+  difficulty: number | null
+  stability: number | null
 }
 
 export interface Stats {
@@ -49,9 +55,13 @@ export interface TrackSummary {
 
 export type ThemeId = 'neural' | 'blackbeard'
 
+export type SchedulerId = 'sm2' | 'fsrs'
+
 export interface Settings {
   daily_review_limit: number
   theme: string
+  scheduler: SchedulerId
+  fsrs_desired_retention: number
 }
 
 export interface SynapseError {
