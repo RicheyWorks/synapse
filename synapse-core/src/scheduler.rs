@@ -27,9 +27,12 @@ impl Scheduler for Sm2Scheduler {
                 _ => ((item.interval_days as f32) * item.ease_factor).round() as u32,
             };
             item.repetitions += 1;
+            item.lapses = 0;
         } else {
             item.repetitions = 0;
             item.interval_days = 1;
+            item.lapses += 1;
+            item.total_lapses += 1;
         }
 
         let q = score as f32;
@@ -88,5 +91,22 @@ mod tests {
         assert_eq!(item.repetitions, 0);
         assert_eq!(item.interval_days, 1);
         assert!(item.ease_factor >= 1.3);
+        assert_eq!(item.lapses, 1);
+        assert_eq!(item.total_lapses, 1);
+    }
+
+    #[test]
+    fn a_success_resets_consecutive_lapses_but_not_lifetime_total() {
+        let mut item = MemoryItem::new("Rust", "What is a lifetime?", "...");
+        let scheduler = Sm2Scheduler;
+
+        scheduler.schedule(&mut item, 1);
+        scheduler.schedule(&mut item, 1);
+        assert_eq!(item.lapses, 2);
+        assert_eq!(item.total_lapses, 2);
+
+        scheduler.schedule(&mut item, 5);
+        assert_eq!(item.lapses, 0);
+        assert_eq!(item.total_lapses, 2);
     }
 }

@@ -26,7 +26,17 @@ pub struct MemoryItem {
     /// Older persisted items won't have this field; default to empty on load.
     #[serde(default)]
     pub review_log: Vec<ReviewLogEntry>,
+    /// Consecutive failed reviews (score < 3), reset to 0 on the next success.
+    #[serde(default)]
+    pub lapses: u32,
+    /// Lifetime failed-review count; never resets. Drives leech detection.
+    #[serde(default)]
+    pub total_lapses: u32,
 }
+
+/// A memory that keeps failing review is a "leech": it's costing more review
+/// time than it's worth and should be flagged for rewriting or suspension.
+pub const LEECH_THRESHOLD: u32 = 8;
 
 impl MemoryItem {
     pub fn new(training_track: &str, prompt: &str, content: &str) -> Self {
@@ -42,12 +52,19 @@ impl MemoryItem {
             next_review: now,
             created_at: now,
             review_log: Vec::new(),
+            lapses: 0,
+            total_lapses: 0,
         }
     }
 
     /// Checks if this specific memory is ready to be drilled/reviewed right now.
     pub fn is_due(&self) -> bool {
         Utc::now() >= self.next_review
+    }
+
+    /// True once this item has failed enough times to be flagged as a leech.
+    pub fn is_leech(&self) -> bool {
+        self.total_lapses >= LEECH_THRESHOLD
     }
 }
 
@@ -62,5 +79,15 @@ mod tests {
         assert_eq!(item.repetitions, 0);
         assert_eq!(item.ease_factor, 2.5);
         assert!(item.review_log.is_empty());
+        assert!(!item.is_leech());
+    }
+
+    #[test]
+    fn item_becomes_leech_at_threshold() {
+        let mut item = MemoryItem::new("Rust", "What is variance?", "...");
+        item.total_lapses = LEECH_THRESHOLD - 1;
+        assert!(!item.is_leech());
+        item.total_lapses = LEECH_THRESHOLD;
+        assert!(item.is_leech());
     }
 }

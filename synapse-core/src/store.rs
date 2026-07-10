@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::domain::MemoryItem;
 use crate::error::SynapseError;
@@ -60,10 +60,35 @@ impl MemoryStore for JsonFileStore {
     }
 }
 
+/// Writes items to an arbitrary path chosen by the user (e.g. a backup file),
+/// as opposed to the app's own persisted store location. Same atomic-write
+/// JSON format as `JsonFileStore`, so exported files are also valid imports.
+pub fn export_to_path(items: &[MemoryItem], path: &Path) -> Result<(), SynapseError> {
+    JsonFileStore::new(path.to_path_buf()).save(items)
+}
+
+/// Reads items from a user-chosen JSON file, e.g. a previously exported backup.
+pub fn import_from_path(path: &Path) -> Result<Vec<MemoryItem>, SynapseError> {
+    JsonFileStore::new(path.to_path_buf()).load()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::MemoryItem;
+
+    #[test]
+    fn export_then_import_round_trips_through_a_backup_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let backup_path = dir.path().join("backup.json");
+
+        let item = MemoryItem::new("Biology", "What is a mitochondrion?", "The powerhouse of the cell");
+        export_to_path(&[item.clone()], &backup_path).unwrap();
+
+        let restored = import_from_path(&backup_path).unwrap();
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].id, item.id);
+    }
 
     #[test]
     fn round_trips_items_through_disk() {

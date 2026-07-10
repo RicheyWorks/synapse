@@ -1,10 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::path::Path;
 use std::sync::Mutex;
 
 use synapse_core::domain::MemoryItem;
 use synapse_core::scheduler::{Scheduler, Sm2Scheduler};
-use synapse_core::store::{JsonFileStore, MemoryStore};
+use synapse_core::stats::{compute_stats, Stats};
+use synapse_core::store::{export_to_path, import_from_path, JsonFileStore, MemoryStore};
 use tauri::Manager;
 
 struct AppState {
@@ -66,6 +68,37 @@ fn get_all_memories(state: tauri::State<'_, AppState>) -> Vec<MemoryItem> {
     state.memories.lock().unwrap().clone()
 }
 
+#[tauri::command]
+fn get_stats(state: tauri::State<'_, AppState>) -> Stats {
+    let memories = state.memories.lock().unwrap();
+    compute_stats(&memories)
+}
+
+#[tauri::command]
+fn export_memories(state: tauri::State<'_, AppState>, path: String) -> Result<(), String> {
+    let memories = state.memories.lock().unwrap();
+    export_to_path(&memories, Path::new(&path)).map_err(|e| e.to_string())
+}
+
+/// Merges items from a backup file into the current set: items whose id already
+/// exists are overwritten, new ids are appended. Returns the number imported.
+#[tauri::command]
+fn import_memories(state: tauri::State<'_, AppState>, path: String) -> Result<usize, String> {
+    let imported = import_from_path(Path::new(&path)).map_err(|e| e.to_string())?;
+    let imported_count = imported.len();
+    {
+        let mut memories = state.memories.lock().unwrap();
+        for item in imported {
+            match memories.iter_mut().find(|m| m.id == item.id) {
+                Some(existing) => *existing = item,
+                None => memories.push(item),
+            }
+        }
+    }
+    state.persist()?;
+    Ok(imported_count)
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -87,7 +120,10 @@ fn main() {
             add_memory,
             review_memory,
             get_due_memories,
-            get_all_memories
+            get_all_memories,
+            get_stats,
+            export_memories,
+            import_memories
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
