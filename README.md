@@ -6,22 +6,23 @@ Everything lives on disk as JSON in your OS's app-data directory. Nothing leaves
 
 ## Features
 
-- **Spaced repetition** — SM-2 scheduling with lapse/leech tracking, so cards you keep failing get flagged instead of silently piling up.
-- **Multiple card types** — Basic (prompt/answer), Cloze deletion, Code snippets, and Image cards.
-- **Knowledge graph** — link related memories together and see the connections.
-- **Analytics** — retention rate, review streaks, a GitHub-style review heatmap, retention-over-time, and per-item forgetting-curve projections.
+- **Two schedulers, your choice** — classic SM-2, or [FSRS-6](https://github.com/open-spaced-repetition), a modern difficulty/stability model that generally schedules more accurately. Switchable per-vault in Settings; existing cards keep whatever scheduler last reviewed them, so switching is never destructive.
+- **Lapse & leech tracking** — cards you keep failing get flagged instead of silently piling up.
+- **Multiple card types** — Basic (prompt/answer), Cloze deletion (with Anki-style `{{c1::answer::hint}}` hints), syntax-highlighted Code snippets, and Image cards.
+- **Knowledge graph** — link related memories and explore the connections in a draggable, zoomable force-directed graph.
+- **Analytics** — retention rate, review streaks, a GitHub-style review heatmap, retention-over-time, and per-item forgetting-curve projections (using real FSRS stability when available, a synthetic estimate otherwise).
 - **Gamification** — XP, levels, and achievements derived live from your review history (nothing to get out of sync — there's no separate XP counter to corrupt).
 - **Two themes** — a clean "neural" default and an optional "blackbeard" pirate theme, both built on the same accessible color system.
 - **Backup/restore** — manual snapshots, automatic pre-import/pre-restore safety backups, rotating history (last 10 kept).
-- **Keyboard-driven review** — reveal, score 0-5, and move to the next card without touching the mouse.
+- **Keyboard-driven review** — reveal, score 0-5, and move to the next card without touching the mouse. Post-score feedback shows the resulting interval before advancing.
 
 ## Tech stack
 
 | Layer | Tech |
 |---|---|
-| Core logic | Rust (`synapse-core`): domain model, SM-2 scheduler, stats, persistence |
+| Core logic | Rust (`synapse-core`): domain model, SM-2 + FSRS-6 schedulers, stats, persistence |
 | Desktop shell | [Tauri](https://tauri.app/) v1 (`src-tauri`) |
-| Frontend | [Svelte 5](https://svelte.dev/) (runes) + TypeScript + [Tailwind CSS](https://tailwindcss.com/) v4 |
+| Frontend | [Svelte 5](https://svelte.dev/) (runes) + TypeScript + [Tailwind CSS](https://tailwindcss.com/) v4 + [Prism.js](https://prismjs.com/) (code highlighting) |
 | Build tool | [Vite](https://vitejs.dev/) |
 
 ## Project structure
@@ -31,9 +32,10 @@ synapse/
 ├── synapse-core/       # Pure Rust domain logic — no Tauri/UI dependency
 │   └── src/
 │       ├── domain.rs        # MemoryItem, CardContent, ReviewLogEntry
-│       ├── scheduler.rs     # Scheduler trait + SM-2 implementation
+│       ├── scheduler.rs     # Scheduler trait + Sm2Scheduler
+│       ├── fsrs.rs          # FsrsScheduler (FSRS-6, ported from the official reference)
 │       ├── store.rs         # MemoryStore trait, atomic JSON persistence
-│       ├── settings.rs      # User preferences (review limit, theme)
+│       ├── settings.rs      # User preferences (review limit, theme, scheduler choice)
 │       ├── window_state.rs  # Remembered window size/position
 │       ├── backup.rs        # Rotating snapshots, restore
 │       ├── stats.rs         # Retention, streaks, heatmap, forgetting curve
@@ -41,13 +43,14 @@ synapse/
 │       ├── gamification.rs  # XP/level/title/achievements
 │       ├── persistence.rs   # Shared atomic read/write JSON helpers
 │       └── error.rs         # SynapseError (typed, frontend-serializable)
-├── src-tauri/           # Tauri command surface + app bootstrap
+├── src-tauri/           # Tauri command surface + app bootstrap (package: "synapse")
 │   └── src/main.rs
 ├── src/                 # Svelte frontend
 │   └── lib/
 │       ├── api.ts            # Typed wrapper around Tauri's invoke()
-│       └── components/       # Dashboard, ReviewSession, TrackManager,
-│                              # KnowledgeGraph, Insights, SettingsPanel, ...
+│       ├── colors.ts          # Validated categorical palette (track/graph colors)
+│       └── components/       # Dashboard, ReviewSession, CardView, TrackManager,
+│                              # KnowledgeGraph, Insights, SettingsPanel, ConfirmDialog, ...
 └── Synapse_Task_Codex.docx   # Original project brief / phased roadmap
 ```
 
@@ -85,11 +88,9 @@ npm run build              # production frontend build
 
 ```bash
 cargo build --release --workspace
-# or, for a full installer bundle:
-cargo tauri build
 ```
 
-The release profile (workspace `Cargo.toml`) enables LTO, single codegen unit, and symbol stripping for a smaller, faster binary.
+The release profile (workspace `Cargo.toml`) enables LTO, single codegen unit, and symbol stripping for a smaller, faster binary (`target/release/synapse.exe` on Windows, ~7MB). `cargo tauri build` should produce a full platform installer using the same profile, but that path hasn't been exercised end-to-end yet — see "Not yet built" below.
 
 ## Data location
 
@@ -102,11 +103,28 @@ Synapse stores its data in the OS-standard app-data directory (via Tauri's `app_
 
 ## Project status
 
-Built in phases, per the original brief in `Synapse_Task_Codex.docx`:
+Built in phases, per the original brief in `Synapse_Task_Codex.docx`. All five are complete:
 
 - [x] **Phase 0** — Foundation & architecture (module boundaries, typed errors, atomic persistence)
 - [x] **Phase 1** — Core hardening (stats engine, leech tracking, import/export)
 - [x] **Phase 2** — Tauri backend (settings, track management, review-session orchestration)
 - [x] **Phase 3** — Frontend bootstrap (Svelte 5 + Tailwind, dashboard, keyboard-driven review, theming)
 - [x] **Phase 4** — Advanced features (card types, knowledge graph, analytics, gamification)
-- [ ] **Phase 5** — Hardening, performance & distribution (in progress)
+- [x] **Phase 5** — Hardening, performance & distribution (release profile, robust backup/restore, window-state persistence, docs)
+
+### Beyond the original roadmap
+
+Two follow-up passes after Phase 5 wrapped:
+
+- **Frontend depth pass** — post-score interval feedback, Anki-style cloze hints, real Prism.js syntax highlighting, and a draggable/zoomable knowledge graph.
+- **FSRS-6 scheduler** — a second `Scheduler` implementation alongside SM-2, selectable per-vault in Settings. Ported directly from the official reference implementation's source, not a paraphrase (see `synapse-core/src/fsrs.rs` for why that distinction mattered).
+
+### Not yet built
+
+Reviewed and consciously deferred, not overlooked:
+
+- **Image asset management** — `CardContent::Image` currently stores a raw path/URL string; no copy-into-appdata or validation, so an image card can break if the source file moves.
+- **Multi-device sync** — by design this app is local-first; the only cross-device path today is manual export/import of an unencrypted JSON file.
+- **Mobile companion** — this app targets Tauri v1 (desktop). A mobile build would mean Tauri v2, a separate migration.
+- **Performance at scale** — untested with thousands of items. The JSON-full-load-into-memory architecture is simple and fine for personal use, but hasn't been benchmarked at scale.
+- **Real distribution** — `cargo tauri build` (installer bundling), auto-update, and code signing are unfinished. Signing in particular needs a purchased identity/certificate — a deliberate decision, not a default next step.
